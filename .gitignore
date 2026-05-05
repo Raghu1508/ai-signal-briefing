@@ -1,3 +1,6 @@
 .env
+.DS_Store
 briefing_*.html
 briefing.log
+__pycache__/
+*.pyc
