@@ -101,7 +101,9 @@ def fetch_briefing() -> dict:
         ],
         capture_output=True,
         text=True,
-        timeout=120
+        timeout=300
+        stdin=subprocess.DEVNULL,
++       cwd="/tmp",
     )
 
     if result.returncode != 0:
@@ -416,6 +418,7 @@ def main():
     # Always save HTML locally
     out_dir   = os.path.dirname(os.path.abspath(__file__))
     html_path = os.path.join(out_dir, f"briefing_{datetime.now().strftime('%Y%m%d')}.html")
+    html = build_html_email(data)
     with open(html_path, "w") as f:
         f.write(html)
     log.info(f"HTML saved → {html_path}")
