@@ -101,9 +101,9 @@ def fetch_briefing() -> dict:
         ],
         capture_output=True,
         text=True,
-        timeout=300
+        timeout=300,
         stdin=subprocess.DEVNULL,
-+       cwd="/tmp",
+        cwd="/tmp",
     )
 
     if result.returncode != 0:
