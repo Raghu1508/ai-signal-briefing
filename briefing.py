@@ -450,7 +450,7 @@ def main():
     out_dir   = os.path.dirname(os.path.abspath(__file__))
     html_path = os.path.join(out_dir, f"briefing_{datetime.now().strftime('%Y%m%d')}.html")
     with open(html_path, "w") as f:
-        f.write(html)
+        f.write(build_html_email(data))
     log.info(f"HTML saved → {html_path}")
 
     # Send Telegram
