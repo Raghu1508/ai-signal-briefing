@@ -6,7 +6,6 @@ Uses the `claude` CLI (already authenticated) to fetch news and generate briefin
 """
 
 import os
-import html
 import json
 import subprocess
 import logging
@@ -403,38 +402,51 @@ def build_html_email(data: dict) -> str:
 
 
 
-# ── Telegram ──────────────────────────────────────────────────────────────────
+# ── Notification (ntfy.sh) ───────────────────────────────────────────────────
+# ntfy.sh works from any IP — no bot, no account, no IP restrictions.
+# On your phone: install the ntfy app → subscribe to your topic name.
+# NTFY_TOPIC env var = any unique string e.g. "raghu-ai-signal-9x3k"
 
-def send_telegram(data: dict):
-    token   = os.environ["TELEGRAM_BOT_TOKEN"]
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
+def send_notification(data: dict):
+    topic = os.environ.get("NTFY_TOPIC")
+    if not topic:
+        log.warning("NTFY_TOPIC not set — skipping notification")
+        return
+
+    learn = data.get("learn", {})
+    py_c  = learn.get("python_concept", {})
+    lg_c  = learn.get("langgraph_concept", {})
+    ch    = learn.get("challenge", {})
+
+    # Build a clean plain-text message for the phone notification
     lines = [
-        f"🤖 *AI Signal – {data.get('date','')}*",
-        f"_{data.get('headline','')}_\n",
-        f"🌐 *Big Picture*\n{data.get('big_picture','')}\n",
+        f"📰 {data.get('headline','')}",
+        "",
+        "TODAY'S STORIES:",
     ]
     for s in data.get("stories", []):
         emoji = {"bullish": "🟢", "bearish": "🔴", "neutral": "🟣"}.get(s.get("signal",""), "⚪")
-        lines.append(f"{emoji} *{s.get('title','')}*")
-        lines.append(f"{s.get('summary','')}\n")
-    learn = data.get("learn", {})
-    py_c = learn.get("python_concept", {})
-    lg_c = learn.get("langgraph_concept", {})
-    ch   = learn.get("challenge", {})
-    if py_c:
-        lines.append(f"🐍 *Python:* {py_c.get('topic','')}")
-    if lg_c:
-        lines.append(f"🔵 *LangGraph:* {lg_c.get('topic','')}")
-    if ch:
-        lines.append(f"⚡ *Challenge:* {ch.get('title','')}")
-    text = "\n".join(lines)
-    payload = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}).encode()
+        lines.append(f"{emoji} {s.get('title','')}")
+    lines += [
+        "",
+        f"🐍 Python: {py_c.get('topic','')}",
+        f"🔵 LangGraph: {lg_c.get('topic','')}",
+        f"⚡ Challenge: {ch.get('title','')}",
+    ]
+    body = "\n".join(lines).encode("utf-8")
+
     req = urllib.request.Request(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data=payload, headers={"Content-Type": "application/json"}
+        f"https://ntfy.sh/{topic}",
+        data=body,
+        headers={
+            "Title": f"AI Signal – {data.get('date','')}",
+            "Priority": "default",
+            "Tags": "robot,newspaper",
+            "Content-Type": "text/plain",
+        }
     )
     urllib.request.urlopen(req)
-    log.info("Telegram sent!")
+    log.info(f"Notification sent to ntfy topic: {topic}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -453,8 +465,8 @@ def main():
         f.write(build_html_email(data))
     log.info(f"HTML saved → {html_path}")
 
-    # Send Telegram
-    send_telegram(data)
+    # Send Notification
+    send_notification(data)
 
     log.info("Done!")
 
