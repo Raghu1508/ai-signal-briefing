@@ -6,12 +6,32 @@ Uses the `claude` CLI (already authenticated) to fetch news and generate briefin
 """
 
 import os
+import html
 import json
 import subprocess
 import logging
 import sys
 import urllib.request
 from datetime import datetime
+from pathlib import Path
+
+# Load .env from multiple locations — works locally and in Claude Code Routines
+def _load_env():
+    for env_path in [
+        Path(__file__).parent / ".env",  # same folder as script
+        Path("/root/.env"),               # Claude Code Routine root
+        Path.home() / ".env",            # home directory
+    ]:
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, _, val = line.partition("=")
+                        os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+            break
+
+_load_env()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -91,20 +111,31 @@ def fetch_briefing() -> dict:
     """Call the claude CLI with web search enabled and parse the JSON response."""
     log.info("Calling claude CLI with web search...")
 
-    result = subprocess.run(
-        [
-            "claude",
-            "--print",                  # non-interactive, print output and exit
-            "--allowedTools", "web_search",  # enable web search
-            "--output-format", "text",
-            PROMPT
-        ],
-        capture_output=True,
-        text=True,
-        timeout=300,
-        stdin=subprocess.DEVNULL,
-        cwd="/tmp",
-    )
+    # Try tool name variants — Claude Code Routines use "WebSearch" not "web_search"
+    for tool_name, perm_mode in [
+        ("WebSearch", "auto"),
+        ("web_search", "auto"),
+        ("WebSearch", "bypassPermissions"),
+        ("web_search", "bypassPermissions"),
+    ]:
+        result = subprocess.run(
+            [
+                "claude",
+                "--print",
+                "--allowedTools", tool_name,
+                "--permission-mode", perm_mode,
+                "--output-format", "text",
+                PROMPT
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        # If we got meaningful output, use it
+        if result.returncode == 0 and len(result.stdout.strip()) > 200:
+            log.info(f"claude CLI succeeded with tool={tool_name} mode={perm_mode}")
+            break
+        log.warning(f"claude CLI failed with tool={tool_name} mode={perm_mode}: {result.stderr[:100]}")
 
     if result.returncode != 0:
         raise RuntimeError(f"claude CLI failed (exit {result.returncode}): {result.stderr[:500]}")
@@ -418,7 +449,6 @@ def main():
     # Always save HTML locally
     out_dir   = os.path.dirname(os.path.abspath(__file__))
     html_path = os.path.join(out_dir, f"briefing_{datetime.now().strftime('%Y%m%d')}.html")
-    html = build_html_email(data)
     with open(html_path, "w") as f:
         f.write(html)
     log.info(f"HTML saved → {html_path}")
