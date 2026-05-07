@@ -439,7 +439,7 @@ def send_notification(data: dict):
         f"https://ntfy.sh/{topic}",
         data=body,
         headers={
-            "Title": f"AI Signal – {data.get('date','')}",
+            "Title": f"AI Signal - {data.get('date','')}",
             "Priority": "default",
             "Tags": "robot,newspaper",
             "Content-Type": "text/plain",
